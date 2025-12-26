@@ -15,8 +15,7 @@
   },
   "plugins": ["@typescript-eslint", "react-hooks"],
   "extends": [
-    "next/core-web-vitals",
-    "next/typescript"
+    "next/core-web-vitals"
   ],
   "settings": {
     "react": {
