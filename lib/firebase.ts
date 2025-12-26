@@ -8,7 +8,7 @@ const firebaseConfig = {
   authDomain: "duaii-app.firebaseapp.com",
   projectId: "duaii-app",
   storageBucket: "duaii-app.firebasestorage.app",
-  messagingSenderId: "150679354206",
+  messagingSenderId: "895280837336",  // ✅ Updated Sender ID
   appId: "1:150679354206:web:16ddb55aff9102de02adcf",
   measurementId: "G-2987X873BL"
 };
@@ -35,7 +35,7 @@ export async function getFCMToken(): Promise<string | null> {
 
   try {
     const token = await getToken(messaging, {
-      vapidKey: 'a1Vl0DSjjVyVgtiN42WPmuZ-XMhT_AX4f4wB98b4Qt8'
+      vapidKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BHPtifK6Jh7UbTt5mDM7ydaeKpenhDc-smIpyRczw2Tg3buNwTQ8RCyYwFlEtXlDu5aAcZ1Q2L5MdKHN8Gn-Hjs'
     });
     return token;
   } catch (error) {

@@ -7,20 +7,21 @@ import * as Sentry from "@sentry/nextjs"
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting check
-    const rateLimitResult = await checkRateLimit("search", request)
-    if (!rateLimitResult.success) {
+    const clientIP = request.headers.get('x-forwarded-for') || 'unknown'
+    const rateLimitResult = checkRateLimit(clientIP, RATE_LIMIT_CONFIG.search)
+    if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { 
           error: "Too many requests",
           message: RATE_LIMIT_CONFIG.search.errorMessage,
-          retryAfter: Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)
+          retryAfter: rateLimitResult.retryAfter
         },
         { 
           status: 429,
           headers: {
-            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': rateLimitResult.resetAt.toString(),
+            'X-RateLimit-Limit': RATE_LIMIT_CONFIG.search.maxRequests.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'Retry-After': rateLimitResult.retryAfter.toString(),
           }
         }
       )

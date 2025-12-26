@@ -144,9 +144,17 @@ export async function requestGeolocationPermission(): Promise<{ state: Permissio
  */
 export async function openAppSettings(): Promise<boolean> {
   try {
-    // Capacitor App.openUrl can be used to open platform-specific settings URLs.
-    // On iOS, 'app-settings:' scheme opens settings. On Android this may not work everywhere.
-    await App.openUrl({ url: 'app-settings:' });
+    // Capacitor App plugin doesn't have openUrl method
+    // Instead, use browser or platform-specific APIs
+    if (typeof window !== 'undefined') {
+      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+        // iOS
+        window.location.href = 'app-settings:';
+      } else if (navigator.userAgent.includes('Android')) {
+        // Android - try to open app settings via intent
+        window.location.href = 'intent://settings/#Intent;action=android.app.action.MANAGE_APP_PERMISSIONS;end';
+      }
+    }
     return true;
   } catch (e) {
     return false;

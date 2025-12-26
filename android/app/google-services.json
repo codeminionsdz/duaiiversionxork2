@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "895280837336",
+    "project_id": "duaiiapp",
+    "storage_bucket": "duaiiapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:895280837336:android:91950b82177ed9b6e15dad",
+        "android_client_info": {
+          "package_name": "com.duaiii.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKgLw3xlEjMEQmz4BFDdk4kj1lctqcm3E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
