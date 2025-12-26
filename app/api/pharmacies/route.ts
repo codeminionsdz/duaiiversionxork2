@@ -1,9 +1,31 @@
 import { createClient } from "@/lib/supabase/server"
 import { fetchDrivingDistance, calculateHaversineDistance } from "@/lib/utils"
 import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, RATE_LIMIT_CONFIG } from "@/lib/rate-limit"
+import * as Sentry from "@sentry/nextjs"
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting check
+    const rateLimitResult = await checkRateLimit("search", request)
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { 
+          error: "Too many requests",
+          message: RATE_LIMIT_CONFIG.search.errorMessage,
+          retryAfter: Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimitResult.resetAt.toString(),
+          }
+        }
+      )
+    }
+
     const { userLatitude, userLongitude } = await request.json()
 
     if (typeof userLatitude !== "number" || typeof userLongitude !== "number") {
@@ -46,6 +68,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("[API] Error fetching pharmacies:", error)
+      Sentry.captureException(error, {
+        tags: { api: 'pharmacies', action: 'fetch' },
+        extra: { userLocation: { userLatitude, userLongitude } }
+      })
       return NextResponse.json(
         { error: "Failed to fetch pharmacies" },
         { status: 500 }
@@ -172,6 +198,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(validPharmacies)
   } catch (error) {
     console.error("[API] Error:", error)
+    Sentry.captureException(error, {
+      tags: { api: 'pharmacies', action: 'general_error' },
+      level: 'error'
+    })
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

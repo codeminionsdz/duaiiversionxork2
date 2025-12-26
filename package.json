@@ -49,6 +49,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/browser": "^8.31.0",
+    "@sentry/nextjs": "^10.32.1",
     "@sentry/node": "^8.31.0",
     "@sentry/react": "^10.32.1",
     "@supabase/ssr": "^0.8.0",
