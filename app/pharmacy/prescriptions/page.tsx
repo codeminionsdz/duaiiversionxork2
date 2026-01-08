@@ -7,6 +7,7 @@ import { FileText, Clock, Sparkles } from 'lucide-react'
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { PrescriptionImageThumbClient } from "@/components/pharmacy/prescription-image-thumb-client"
 
 export default async function PharmacyPrescriptionsPage() {
   const supabase = await createClient()
@@ -135,6 +136,13 @@ export default async function PharmacyPrescriptionsPage() {
     })) || [])
   ]
 
+  // معالجة الصور بشكل آمن - تخزين مسارات الملفات فقط
+  // الصور ستُحوّل إلى signed URLs في المتصفح
+  const prescriptionsWithImages = prescriptions.map((p: any) => {
+    const imagePath = p.images_urls?.[0] || p.image_url
+    return { ...p, imagePath: imagePath || null }
+  })
+
   return (
     <div className="min-h-screen pb-20 bg-gradient-to-b from-blue-50/30 via-white to-white">
       <header className="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white p-6 rounded-b-[2rem] shadow-xl relative overflow-hidden">
@@ -154,22 +162,13 @@ export default async function PharmacyPrescriptionsPage() {
       </header>
 
       <main className="p-4">
-        {prescriptions && prescriptions.length > 0 ? (
+        {prescriptionsWithImages && prescriptionsWithImages.length > 0 ? (
           <div className="space-y-4">
-            {prescriptions?.map((prescription: any) => (
+            {prescriptionsWithImages?.map((prescription: any) => (
               <Link key={prescription.id} href={prescription.has_responded ? `/pharmacy/patients/${prescription.id}/send-medicine` : `/pharmacy/prescriptions/${prescription.id}`}>
                 <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 cute-card border-2 border-blue-100/50 rounded-2xl bg-gradient-to-br from-white to-blue-50/20">
                   <div className="flex gap-4 p-5">
-                    <div className="relative w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-100 to-blue-50 border-2 border-blue-200 shadow-md">
-                    <Image
-                        src={prescription.images_urls?.[0] || "/placeholder.svg"}
-                        alt="وصفة طبية"
-                        fill
-                        className="object-cover"
-                        unoptimized={true}
-                        priority={false}
-                      />
-                    </div>
+                    <PrescriptionImageThumbClient imagePath={prescription.imagePath} />
 
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>

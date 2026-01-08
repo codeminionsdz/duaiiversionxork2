@@ -12,6 +12,8 @@ import { FileText, MapPin, Clock, Phone, ArrowRight, Sparkles, Heart } from 'luc
 import { useToast } from "@/hooks/use-toast"
 import type { Prescription, PrescriptionResponse } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils/number-converter"
+import { getImagesFromPrescription } from "@/lib/image-utils"
+import Image from 'next/image'
 
 interface PrescriptionDetailClientProps {
   prescriptionId: string
@@ -22,6 +24,7 @@ export function PrescriptionDetailClient({ prescriptionId }: PrescriptionDetailC
   const [responses, setResponses] = useState<PrescriptionResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  const [imageUrls, setImageUrls] = useState<string[]>([])
   const router = useRouter()
   const { toast } = useToast()
 
@@ -38,6 +41,11 @@ export function PrescriptionDetailClient({ prescriptionId }: PrescriptionDetailC
 
       if (prescriptionData) {
         setPrescription(prescriptionData)
+        
+        // الحصول على جميع الصور بشكل آمن
+        const imagePaths = prescriptionData.images_urls || (prescriptionData.image_url ? [prescriptionData.image_url] : [])
+        const urls = await getImagesFromPrescription(imagePaths)
+        setImageUrls(urls)
       }
 
       // Get responses with pharmacy info
@@ -154,25 +162,29 @@ export function PrescriptionDetailClient({ prescriptionId }: PrescriptionDetailC
               <div className="bg-emerald-100 rounded-full p-2">
                 <FileText className="h-5 w-5 text-emerald-600" />
               </div>
-              صورة الوصفة
+              صور الوصفة {imageUrls.length > 0 && `(${imageUrls.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            {prescription.images_urls && prescription.images_urls.length > 0 ? (
+            {imageUrls.length > 0 ? (
               <div className="space-y-4">
-                <div className="relative w-full rounded-2xl overflow-hidden bg-white shadow-md border-4 border-emerald-200">
-                  <img
-                    src={prescription.images_urls[0] || "/placeholder.svg"}
-                    alt="وصفة طبية"
-                    className="w-full h-auto object-contain max-h-[600px]"
-                  />
-                </div>
+                {imageUrls.map((url, index) => (
+                  <div key={index} className="relative w-full rounded-2xl overflow-hidden bg-white shadow-md border-4 border-emerald-200">
+                    <Image
+                      src={url}
+                      alt={`وصفة طبية ${index + 1}`}
+                      width={800}
+                      height={600}
+                      className="w-full h-auto object-contain max-h-[600px]"
+                      priority={index === 0}
+                    />
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="relative w-full h-96 rounded-2xl overflow-hidden bg-white shadow-md border-2 border-emerald-100">
-                <div className="flex items-center justify-center h-full bg-gray-100">
-                  <FileText className="h-16 w-16 text-gray-300" />
-                </div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-100 rounded-2xl border-4 border-dashed border-gray-300">
+                <FileText className="h-16 w-16 text-gray-300 mb-4" />
+                <p className="text-gray-500 text-lg">لا توجد صور مرفقة</p>
               </div>
             )}
             {prescription.notes && (

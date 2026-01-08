@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { LogIn, Mail, Lock, Sparkles } from "lucide-react"
 import { loginSchema, getFirstErrorMessage } from "@/lib/validation"
+import { apiFetch } from "@/lib/api-client"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -43,7 +44,7 @@ export default function LoginPage() {
         return
       }
 
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

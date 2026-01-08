@@ -27,7 +27,8 @@ export interface PharmacyProfile {
 export interface Prescription {
   id: string
   user_id: string
-  images_urls: string[]
+  image_url?: string | null     // Old format for backward compatibility
+  images_urls?: string[] | null // New format (array of image paths)
   notes: string | null
   status: PrescriptionStatus
   user_latitude: number | null

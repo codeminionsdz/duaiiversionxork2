@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client"
 import { PharmacyBottomNav } from "@/components/layout/pharmacy-bottom-nav"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Building2, MapPin, FileText, Phone, Mail, LogOut, Sparkles, Edit2 } from 'lucide-react'
+import { Building2, MapPin, FileText, Phone, Mail, LogOut, Sparkles, Edit2, Clock } from 'lucide-react'
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
+import { Switch } from "@/components/ui/switch"
 
 export default function PharmacyProfilePage() {
   const [profile, setProfile] = useState<any>(null)
@@ -16,6 +17,7 @@ export default function PharmacyProfilePage() {
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  const [isOpen, setIsOpen] = useState(true)
   const [editedData, setEditedData] = useState({
     pharmacy_name: "",
     license_number: "",
@@ -63,6 +65,7 @@ export default function PharmacyProfilePage() {
 
       if (pharmacyData) {
         setPharmacyProfile(pharmacyData)
+        setIsOpen(pharmacyData.is_open ?? true) // Set current status
         setEditedData({
           pharmacy_name: pharmacyData.pharmacy_name || "",
           license_number: pharmacyData.license_number || "",
@@ -148,19 +151,54 @@ export default function PharmacyProfilePage() {
     if (profileError) {
       toast({
         title: "خطأ",
-        description: "فشل في حفظ رقم الهاتف",
+        description: "فشل في تحديث رقم الهاتف",
         variant: "destructive",
       })
       return
     }
 
-    setPharmacyProfile({ ...pharmacyProfile, ...editedData })
-    setProfile({ ...profile, phone: editedData.phone })
     setIsEditing(false)
-
     toast({
-      title: "تم الحفظ",
-      description: "تم تحديث معلومات الصيدلية بنجاح",
+      title: "تم الحفظ بنجاح",
+      description: "تم تحديث معلومات الصيدلية",
+    })
+
+    // Refresh data
+    const { data: updatedPharmacy } = await supabase
+      .from("pharmacy_profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (updatedPharmacy) setPharmacyProfile(updatedPharmacy)
+  }
+
+  const togglePharmacyStatus = async (newStatus: boolean) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return
+
+    const { error } = await supabase
+      .from("pharmacy_profiles")
+      .update({ is_open: newStatus })
+      .eq("id", user.id)
+
+    if (error) {
+      toast({
+        title: "خطأ",
+        description: "فشل في تحديث حالة الصيدلية",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsOpen(newStatus)
+    toast({
+      title: newStatus ? "الصيدلية مفتوحة" : "الصيدلية مغلقة",
+      description: newStatus 
+        ? "سيتمكن المستخدمون من رؤية صيدليتك كمفتوحة"
+        : "لن يتمكن المستخدمون من التواصل معك الآن",
     })
   }
 
@@ -178,6 +216,16 @@ export default function PharmacyProfilePage() {
     )
   }
 
+  if (!profile || !pharmacyProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">جاري تحميل البيانات...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen pb-20 bg-gradient-to-b from-blue-50/30 via-white to-white">
       <header className="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white p-8 rounded-b-[2rem] shadow-xl relative overflow-hidden">
@@ -190,11 +238,48 @@ export default function PharmacyProfilePage() {
             <Sparkles className="absolute -top-2 -right-2 h-6 w-6 text-yellow-300 animate-pulse" />
           </div>
           <h1 className="text-3xl font-bold mb-1">{pharmacyProfile?.pharmacy_name || "صيدلية"}</h1>
-          <p className="text-blue-100 text-sm">{profile.full_name}</p>
+          <p className="text-blue-100 text-sm">{profile?.full_name || ""}</p>
         </div>
       </header>
 
       <main className="p-4 space-y-6">
+        {/* Status Toggle Card */}
+        <Card className="border-2 border-blue-100 shadow-lg rounded-2xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-br from-blue-50 to-white pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <div className={`rounded-full p-2 ${isOpen ? 'bg-green-100' : 'bg-red-100'}`}>
+                <Clock className={`h-5 w-5 ${isOpen ? 'text-green-600' : 'text-red-600'}`} />
+              </div>
+              حالة الصيدلية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-br from-blue-50 to-white rounded-2xl border-2 border-blue-100">
+              <div className="flex-1">
+                <h3 className="font-bold text-lg mb-1">
+                  {isOpen ? "🟢 مفتوحة الآن" : "🔴 مغلقة"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {isOpen 
+                    ? "المستخدمون يمكنهم رؤية صيدليتك والتواصل معك"
+                    : "صيدليتك مخفية عن المستخدمين حالياً"
+                  }
+                </p>
+              </div>
+              <Switch
+                checked={isOpen}
+                onCheckedChange={togglePharmacyStatus}
+                className="data-[state=checked]:bg-green-500"
+              />
+            </div>
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-800">
+                💡 يمكنك تغيير هذه الحالة في أي وقت حسب أوقات دوام صيدليتك
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="border-2 border-blue-100 shadow-lg rounded-2xl overflow-hidden">
           <CardHeader className="bg-gradient-to-br from-blue-50 to-white pb-4">
             <CardTitle className="flex items-center justify-between">

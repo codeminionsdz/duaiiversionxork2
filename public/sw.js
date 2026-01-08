@@ -1,14 +1,25 @@
 // Service Worker for دوائي App - PWA + Offline Support + Push Notifications
-const CACHE_NAME = 'duaiii-v2'
-const STATIC_CACHE = 'duaiii-static-v2'
-const API_CACHE = 'duaiii-api-v2'
+const CACHE_NAME = 'duaiii-v3-offline'
+const STATIC_CACHE = 'duaiii-static-v3'
+const API_CACHE = 'duaiii-api-v3'
+const PAGES_CACHE = 'duaiii-pages-v3'
 
-// URLs to cache on install (static assets + app shell)
+// URLs to cache on install (static assets + app shell + all pages)
 const URLS_TO_CACHE = [
   '/',
   '/home',
   '/auth/login',
+  '/auth/signup',
+  '/upload',
+  '/prescriptions',
+  '/medicines',
+  '/favorites',
+  '/notifications',
+  '/profile',
+  '/pharmacy/dashboard',
+  '/pharmacy/profile',
   '/images/logo.png',
+  '/images/logo-192.png',
   '/icon.svg',
   '/manifest.json',
 ]
@@ -39,8 +50,8 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          // Delete old caches
-          if (cacheName !== STATIC_CACHE && cacheName !== API_CACHE && cacheName !== CACHE_NAME) {
+          // Delete old caches (keep only v3 caches)
+          if (!cacheName.includes('v3') && !cacheName.includes('map-tiles') && !cacheName.includes('leaflet-assets')) {
             console.log('🗑️ Deleting old cache:', cacheName)
             return caches.delete(cacheName)
           }
@@ -82,6 +93,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Let Next.js assets bypass the SW to avoid chunk caching issues
+  if (url.pathname.startsWith('/_next/')) {
+    return
+  }
+
   // Don't cache API requests - let them fail gracefully offline
   // This ensures offline detection works properly
   if (url.pathname.startsWith('/api/')) {
@@ -93,6 +109,54 @@ self.addEventListener('fetch', (event) => {
           JSON.stringify({ error: 'Offline' }),
           { status: 503, headers: { 'Content-Type': 'application/json' } }
         )
+      })
+    )
+    return
+  }
+
+  // Cache OpenStreetMap tiles for offline map support
+  if (url.hostname.includes('tile.openstreetmap.org')) {
+    event.respondWith(
+      caches.open('map-tiles-v1').then((cache) => {
+        return cache.match(request).then((response) => {
+          if (response) {
+            return response
+          }
+
+          return fetch(request).then((response) => {
+            // Only cache successful responses
+            if (response && response.status === 200) {
+              cache.put(request, response.clone())
+            }
+            return response
+          }).catch(() => {
+            // Return transparent 1x1 pixel for failed tiles
+            return new Response(
+              atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='),
+              { 
+                status: 200,
+                headers: { 'Content-Type': 'image/png' }
+              }
+            )
+          })
+        })
+      })
+    )
+    return
+  }
+
+  // Cache Leaflet assets
+  if (url.hostname.includes('unpkg.com') && url.pathname.includes('leaflet')) {
+    event.respondWith(
+      caches.open('leaflet-assets-v1').then((cache) => {
+        return cache.match(request).then((response) => {
+          return response || fetch(request).then((response) => {
+            if (response && response.status === 200) {
+              cache.put(request, response.clone())
+            }
+            return response
+          })
+        })
       })
     )
     return
@@ -135,35 +199,87 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // For HTML pages, use network-first strategy with fallback to cache
+  // For HTML pages, use CACHE-FIRST strategy for offline support
+  // This allows full navigation even without internet
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        // Don't cache error responses
-        if (!response || response.status !== 200) {
-          return response
-        }
+    caches.match(request).then((cachedResponse) => {
+      // Return cached version immediately if available
+      if (cachedResponse) {
+        // Update cache in background (stale-while-revalidate)
+        fetch(request)
+          .then((response) => {
+            if (response && response.status === 200) {
+              caches.open(PAGES_CACHE).then((cache) => {
+                cache.put(request, response.clone())
+              })
+            }
+          })
+          .catch(() => {
+            // Silently fail - we already have cached version
+          })
+        
+        return cachedResponse
+      }
 
-        const responseToCache = response.clone()
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache)
-        })
-
-        return response
-      })
-      .catch(() => {
-        // On offline, try to serve cached version
-        return caches.match(request).then((response) => {
-          if (response) {
-            return response
+      // If not cached, try network and cache it
+      return fetch(request)
+        .then((response) => {
+          // Cache successful responses
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(PAGES_CACHE).then((cache) => {
+              cache.put(request, responseToCache)
+            })
           }
-
-          // If not cached, return home page (which will show offline screen)
+          return response
+        })
+        .catch(() => {
+          // If network fails and no cache, return offline page
           return caches.match('/').then((home) => {
-            return home || new Response('Offline - Cache not available', { status: 503 })
+            return home || new Response(
+              `<!DOCTYPE html>
+              <html lang="ar" dir="rtl">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>دوائي - غير متصل</title>
+                <style>
+                  body {
+                    font-family: 'Cairo', -apple-system, sans-serif;
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    color: white;
+                    text-align: center;
+                    padding: 20px;
+                  }
+                  .container {
+                    max-width: 400px;
+                  }
+                  h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+                  p { font-size: 1.1rem; opacity: 0.9; }
+                  .icon { font-size: 4rem; margin-bottom: 1rem; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="icon">📡</div>
+                  <h1>لا يوجد اتصال</h1>
+                  <p>يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى</p>
+                </div>
+              </body>
+              </html>`,
+              { 
+                status: 200,
+                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+              }
+            )
           })
         })
-      })
+    })
   )
 })
 

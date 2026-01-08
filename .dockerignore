@@ -1,0 +1,75 @@
+# Dependencies
+node_modules
+npm-debug.log
+pnpm-debug.log
+yarn-error.log
+
+# Next.js
+.next
+out
+dist
+build
+.vercel
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.github
+
+# Testing
+coverage
+.nyc_output
+*.log
+
+# Documentation
+*.md
+!README.md
+
+# Android/iOS
+android
+ios
+mobile
+
+# Capacitor
+capacitor.config.ts
+
+# Misc
+*.tsbuildinfo
+.husky
+.lintstagedrc.json
+.prettierrc
+.eslintrc.json
+vitest.config.ts
+
+# Scripts and tests
+scripts
+tests
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Build scripts
+build-*.sh
+build-*.ps1
+check-*.sh
+test-*.sh
+test-*.ps1

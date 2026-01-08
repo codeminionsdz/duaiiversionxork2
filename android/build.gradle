@@ -24,10 +24,56 @@ allprojects {
     }
 }
 
-// Configure toolchain to auto-download Java 21
+// Force Java 17 across all Android modules (including capacitor-android)
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                if (hasProperty('kotlinOptions')) {
+                    kotlinOptions {
+                        jvmTarget = '17'
+                    }
+                }
+            }
+        }
+        try {
+            def kotlinCompile = Class.forName('org.jetbrains.kotlin.gradle.tasks.KotlinCompile')
+            project.tasks.withType(kotlinCompile).configureEach {
+                kotlinOptions {
+                    jvmTarget = '17'
+                }
+            }
+        } catch (Throwable ignored) {
+            // Kotlin plugin not applied on this subproject
+        }
+        try {
+            def kotlinExt = project.extensions.findByName("kotlin")
+            if (kotlinExt && kotlinExt.metaClass.respondsTo(kotlinExt, "jvmToolchain", Integer.TYPE)) {
+                kotlinExt.jvmToolchain(17)
+            }
+            def compilerOptions = kotlinExt?.getClass()?.methods?.find { it.name == 'getCompilerOptions' }
+            if (compilerOptions) {
+                def options = compilerOptions.invoke(kotlinExt)
+                def jvmTargetProp = options?.getClass()?.methods?.find { it.name == 'getJvmTarget' }
+                def setJvmTarget = options?.getClass()?.methods?.find { it.name == 'setJvmTarget' }
+                if (jvmTargetProp && setJvmTarget) {
+                    setJvmTarget.invoke(options, '17')
+                }
+            }
+        } catch (Throwable ignored) {
+            // Safe fallback if kotlin extension not present
+        }
+    }
+}
+
+// Configure toolchain to use Java 17 (installed version)
 plugins.withType(JavaPlugin).configureEach {
     java.toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 

@@ -10,11 +10,13 @@ import { PermissionsRequestGate } from "@/components/client-boundaries/permissio
 import { OnboardingGate } from "@/components/client-boundaries/onboarding-gate"
 import { WelcomeScreenGate } from "@/components/client-boundaries/welcome-screen-gate"
 import { OfflineGate } from "@/components/client-boundaries/offline-gate"
+import { OfflineIndicator } from "@/components/offline-indicator"
+import { OfflineSyncInit } from "@/components/offline-sync-init"
+import { ErrorBoundary } from "@/components/error-boundary"
 import Footer from '@/components/layout/footer'
-// Initialize server-side Sentry (minimal)
-import '@/lib/sentry.server'
 import ClientInit from '@/components/sentry/ClientInit'
 import "./globals.css"
+import "leaflet/dist/leaflet.css"
 
 const cairo = Cairo({
   subsets: ["latin", "arabic"],
@@ -48,27 +50,39 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
+      </head>
       <body suppressHydrationWarning className={`${cairo.className} font-sans antialiased cute-bg`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <ClientInit />
-          <OfflineGate>
-            <FlowProvider>
-              <WelcomeScreenGate />
-              <PermissionsRequestGate />
-              <PWARegisterGate />
-              <OnboardingGate>
-                {children}
-                <Footer />
-                <Toaster />
-              </OnboardingGate>
-            </FlowProvider>
-          </OfflineGate>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <OfflineIndicator />
+          <OfflineSyncInit />
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ClientInit />
+            <OfflineGate>
+              <FlowProvider>
+                <WelcomeScreenGate />
+                <PermissionsRequestGate />
+                <PWARegisterGate />
+                <OnboardingGate>
+                  {children}
+                  <Footer />
+                  <Toaster />
+                </OnboardingGate>
+              </FlowProvider>
+            </OfflineGate>
+          </ThemeProvider>
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

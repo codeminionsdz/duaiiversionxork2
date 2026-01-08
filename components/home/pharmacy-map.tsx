@@ -59,6 +59,13 @@ export function PharmacyMap({ pharmacies: initialPharmacies }: { pharmacies: Pha
   // Fetch pharmacies with real user location when component mounts
   useEffect(() => {
     const fetchPharmaciesWithRealLocation = async () => {
+      // Don't fetch if offline
+      if (!navigator.onLine) {
+        console.log("📡 Offline mode - using initial pharmacy data")
+        setIsLoadingRealDistances(false)
+        return
+      }
+
       try {
         setIsLoadingRealDistances(true)
         
@@ -69,24 +76,35 @@ export function PharmacyMap({ pharmacies: initialPharmacies }: { pharmacies: Pha
               const { latitude, longitude } = position.coords
               console.log(`📍 Got user's real location: (${latitude}, ${longitude})`)
 
-              // Call API to get pharmacies with real distances
-              const response = await fetch("/api/pharmacies", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  userLatitude: latitude,
-                  userLongitude: longitude,
-                }),
-              })
+              // Check online status before API call
+              if (!navigator.onLine) {
+                console.log("📡 Went offline - using initial pharmacy data")
+                setIsLoadingRealDistances(false)
+                return
+              }
 
-              if (response.ok) {
-                const pharmaciesWithRealDistances = await response.json()
-                console.log("📊 Pharmacies with real distances:", pharmaciesWithRealDistances)
-                setPharmacies(pharmaciesWithRealDistances)
-              } else {
-                console.warn("Failed to fetch pharmacies with real distances, using initial data")
+              try {
+                // Call API to get pharmacies with real distances
+                const response = await fetch("/api/pharmacies", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    userLatitude: latitude,
+                    userLongitude: longitude,
+                  }),
+                })
+
+                if (response.ok) {
+                  const pharmaciesWithRealDistances = await response.json()
+                  console.log("📊 Pharmacies with real distances:", pharmaciesWithRealDistances)
+                  setPharmacies(pharmaciesWithRealDistances)
+                } else {
+                  console.warn("Failed to fetch pharmacies with real distances, using initial data")
+                }
+              } catch (fetchError) {
+                console.warn("Network error fetching pharmacies, using initial data:", fetchError)
               }
             },
             (error) => {

@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 5.2.0",
+    "promptToConfigurePushNotifications": false
+  },
+  "build": {
+    "production": {
+      "node": "20.11.0",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "@supabase_url",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "@supabase_anon_key"
+      }
+    },
+    "preview": {
+      "node": "20.11.0",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "",
+        "track": "internal"
+      }
+    }
+  }
+}

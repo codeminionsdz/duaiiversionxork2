@@ -69,29 +69,43 @@ export async function POST(request: Request) {
       return Response.json({ error: "Prescription not found" }, { status: 404 })
     }
 
-    // Create notification for the patient
+    // Create notification for the patient + send push with rich content
     try {
       console.log("🔔 Creating notification for patient:", prescription.user_id)
-      
-      const notifyRes = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/notifications/create-admin`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: prescription.user_id,
-            title: "رد جديد من الصيدلية",
-            message: "تم الرد على وصفتك. افتح التفاصيل للاطلاع.",
-            type: "pharmacy",
-            data: {
-              prescription_id,
-              pharmacy_id: user.id,
-              total_price,
-              has_medicines: medicines.length > 0,
-            }
-          })
-        }
-      )
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+      // Get pharmacy display name for message richness
+      const { data: pharmacyProfile } = await supabase
+        .from("pharmacy_profiles")
+        .select("name")
+        .eq("id", user.id)
+        .single()
+
+      const pharmacyName = pharmacyProfile?.name || "الصيدلية"
+      const medicinesCount = medicines.length
+      const summary = medicinesCount > 0
+        ? `عدد الأدوية: ${medicinesCount}`
+        : "تفاصيل الرد متاحة في التطبيق"
+      const priceText = total_price ? `التكلفة التقديرية: ${total_price} دج` : "بدون تسعير حتى الآن"
+
+      // Insert DB notification (in-app list)
+      const notifyRes = await fetch(`${appUrl}/api/notifications/create-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: prescription.user_id,
+          title: `رد جديد من ${pharmacyName}`,
+          message: `${summary} • ${priceText}`,
+          type: "pharmacy",
+          data: {
+            prescription_id,
+            pharmacy_id: user.id,
+            total_price,
+            has_medicines: medicinesCount > 0,
+          }
+        })
+      })
 
       if (notifyRes.ok) {
         const notifyData = await notifyRes.json()
@@ -99,6 +113,30 @@ export async function POST(request: Request) {
       } else {
         const error = await notifyRes.json()
         console.error("❌ Failed to create notification:", error)
+      }
+
+      // Send web push if subscription exists
+      try {
+        const pushRes = await fetch(`${appUrl}/api/notifications/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: prescription.user_id,
+            title: `رد جديد من ${pharmacyName}`,
+            body: `${summary} • ${priceText}`,
+            url: `${appUrl}/prescriptions/${prescription_id}`,
+            tag: `prescription-${prescription_id}`,
+            role: 'patient',
+            actionType: 'pharmacy_response',
+          })
+        })
+
+        if (!pushRes.ok) {
+          const err = await pushRes.json().catch(() => ({}))
+          console.warn("⚠️ Push send failed:", err)
+        }
+      } catch (pushErr) {
+        console.warn("⚠️ Push send error:", pushErr)
       }
     } catch (e) {
       console.error("❌ Error creating notification:", e)

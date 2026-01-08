@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("prescriptions")
-      .select("id, user_id, status, created_at, notes, images_urls, has_responded")
+      .select("id, user_id, status, created_at, notes, images_urls")
       .order("created_at", { ascending: false })
       .limit(10000)
 

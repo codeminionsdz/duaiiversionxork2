@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { UserPlus, Sparkles } from 'lucide-react'
 import { createClient } from "@/lib/supabase/client"
+import { apiFetch } from "@/lib/api-client"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -90,7 +91,7 @@ export default function SignupPage() {
 
       console.log("📤 Sending signup to API:", payload);
 
-      const res = await fetch('/api/auth/register', {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

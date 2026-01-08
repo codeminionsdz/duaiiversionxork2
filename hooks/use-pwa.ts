@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { apiFetch } from '@/lib/api-client'
 
 // Utility function to convert VAPID key
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -16,32 +17,40 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export function usePWARegistration() {
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
-        .then((registration) => {
-          console.log('✅ Service Worker registered:', registration)
-          
-          // Request notification permission
-          if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-              Notification.requestPermission().then((permission) => {
-                if (permission === 'granted') {
-                  console.log('📢 Notification permission granted')
-                  // Subscribe to push notifications
-                  subscribeToPushNotifications(registration)
-                }
-              })
-            } else if (Notification.permission === 'granted') {
-              // Already granted, subscribe
-              subscribeToPushNotifications(registration)
-            }
-          }
-        })
-        .catch((err) => {
-          console.error('❌ Service Worker registration failed:', err)
-        })
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+
+    // Avoid SW caching issues during local development
+    if (process.env.NODE_ENV !== 'production') {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister())
+      })
+      return
     }
+
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((registration) => {
+        console.log('✅ Service Worker registered:', registration)
+        
+        // Request notification permission
+        if ('Notification' in window) {
+          if (Notification.permission === 'default') {
+            Notification.requestPermission().then((permission) => {
+              if (permission === 'granted') {
+                console.log('📢 Notification permission granted')
+                // Subscribe to push notifications
+                subscribeToPushNotifications(registration)
+              }
+            })
+          } else if (Notification.permission === 'granted') {
+            // Already granted, subscribe
+            subscribeToPushNotifications(registration)
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('❌ Service Worker registration failed:', err)
+      })
   }, [])
 }
 
@@ -82,7 +91,7 @@ async function subscribeToPushNotifications(registration: ServiceWorkerRegistrat
       console.log('📲 Push subscription created:', subscription.endpoint)
 
       // Send subscription to backend
-      const response = await fetch('/api/notifications/subscribe', {
+      const response = await apiFetch('/api/notifications/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

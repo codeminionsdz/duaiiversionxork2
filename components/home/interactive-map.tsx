@@ -2,8 +2,17 @@
 
 import { useEffect, useRef, useState } from "react"
 import L from "leaflet"
-import "leaflet/dist/leaflet.css"
 import { createClient } from "@/lib/supabase/client"
+
+// Fix for default marker icons in Leaflet (required for mobile)
+if (typeof window !== 'undefined') {
+  delete (L.Icon.Default.prototype as any)._getIconUrl
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  })
+}
 
 interface Pharmacy {
   id: string
@@ -59,6 +68,24 @@ export default function InteractiveMap({ pharmacies, selectedPharmacy, onSelectP
   const routeLayerRef = useRef<L.Polyline | null>(null)
   const [currentZoom, setCurrentZoom] = useState<number>(13)
   const infoControlRef = useRef<L.Control | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+  const [mapError, setMapError] = useState(false)
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    
+    setIsOnline(navigator.onLine)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -84,21 +111,47 @@ export default function InteractiveMap({ pharmacies, selectedPharmacy, onSelectP
       const mapContainer = document.getElementById("map")
       if (!mapContainer) return
 
-      mapRef.current = L.map("map", {
-        zoomControl: true,
-        attributionControl: true,
-      }).setView(userLocation, 13)
+      // Ensure container has dimensions
+      if (mapContainer.offsetHeight === 0) {
+        mapContainer.style.height = '400px'
+      }
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap",
-        maxZoom: 19,
-      }).addTo(mapRef.current)
+      try {
+        mapRef.current = L.map("map", {
+          zoomControl: true,
+          attributionControl: true,
+          preferCanvas: true, // Better performance on mobile
+          tap: true, // Enable tap on mobile
+          touchZoom: true,
+        }).setView(userLocation, 13)
 
-      // Add zoom event listener
-      mapRef.current.on('zoomend', () => {
-        const zoom = mapRef.current!.getZoom()
-        setCurrentZoom(zoom)
-      })
+        const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap",
+          maxZoom: 19,
+          detectRetina: true, // Better display on high-DPI screens
+          errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==', // Transparent 1x1 pixel
+        })
+
+        tileLayer.on('tileerror', () => {
+          if (!navigator.onLine) {
+            setMapError(true)
+          }
+        })
+
+        tileLayer.addTo(mapRef.current)
+
+        // Force resize after initialization (fixes mobile display issues)
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.invalidateSize()
+          }
+        }, 100)
+
+        // Add zoom event listener
+        mapRef.current.on('zoomend', () => {
+          const zoom = mapRef.current!.getZoom()
+          setCurrentZoom(zoom)
+        })
 
       // Add custom info control to show filter information
       const infoControl = L.Control.extend({
@@ -130,6 +183,10 @@ export default function InteractiveMap({ pharmacies, selectedPharmacy, onSelectP
         .addTo(mapRef.current)
       
       console.log("✅ Map initialized at user location:", userLocation)
+      } catch (error) {
+        console.error("Error initializing map:", error)
+        setMapError(true)
+      }
     }
 
     if (!mapRef.current) return
@@ -372,6 +429,52 @@ export default function InteractiveMap({ pharmacies, selectedPharmacy, onSelectP
       }
     }
   }, [])
+
+  // Show offline message when no internet
+  if (!isOnline || mapError) {
+    return (
+      <div className="w-full h-96 rounded-2xl border-2 border-emerald-100 shadow-lg overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-blue-50 flex items-center justify-center p-8">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="relative w-24 h-24 mx-auto">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full opacity-20 animate-ping" />
+            <div className="relative bg-white rounded-full p-5 shadow-lg">
+              <svg className="w-14 h-14 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-emerald-900">
+              {!isOnline ? '📡 لا يوجد اتصال بالإنترنت' : '🗺️ خطأ في تحميل الخريطة'}
+            </h3>
+            <p className="text-sm text-emerald-700 leading-relaxed">
+              {!isOnline 
+                ? 'يرجى التحقق من اتصالك بالإنترنت لعرض الخريطة والصيدليات القريبة منك'
+                : 'حدث خطأ أثناء تحميل الخريطة. يرجى المحاولة مرة أخرى'
+              }
+            </p>
+          </div>
+          {!isOnline && (
+            <div className="flex items-center justify-center gap-2 text-xs text-emerald-600 bg-white/50 rounded-lg p-3 backdrop-blur-sm">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="font-semibold">غير متصل</span>
+            </div>
+          )}
+          {isOnline && mapError && (
+            <button
+              onClick={() => {
+                setMapError(false)
+                window.location.reload()
+              }}
+              className="mt-4 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+            >
+              🔄 إعادة المحاولة
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return <div id="map" className="w-full h-96 rounded-2xl border-2 border-emerald-100 shadow-lg overflow-hidden" />
 }

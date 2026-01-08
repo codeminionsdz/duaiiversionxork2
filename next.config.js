@@ -3,6 +3,21 @@ const { withSentryConfig } = require("@sentry/nextjs");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        port: '',
+        // Support signed URLs returned by API
+        pathname: '/storage/v1/object/sign/**',
+      },
+    ],
     domains: ['nbdytzfnzccwshagzpeu.supabase.co'],
   },
   // Keep source maps in production builds to aid Sentry debugging (upload maps to Sentry for best results)

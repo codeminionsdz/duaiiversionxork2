@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { Capacitor } from "@capacitor/core"
+import { App as CapacitorApp } from "@capacitor/app"
 import { createClient } from "@/lib/supabase/client"
 import { BottomNav } from "@/components/layout/bottom-nav"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -105,12 +107,23 @@ export default function PharmacyPage() {
     }
   }
 
-  const handleNavigate = () => {
+  const handleNavigate = async () => {
     if (!pharmacy) return
 
-    // Open Google Maps with directions
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${pharmacy.latitude},${pharmacy.longitude}`
-    window.open(url, '_blank')
+    const destination = `${pharmacy.latitude},${pharmacy.longitude}`
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}`
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await CapacitorApp.openUrl({ url: mapsUrl })
+      } else {
+        window.open(mapsUrl, "_blank", "noopener")
+      }
+    } catch (error) {
+      console.error("Failed to open maps", error)
+      // Fallback to same-tab navigation if opening a new tab fails
+      window.location.href = mapsUrl
+    }
   }
 
   if (isLoading) {

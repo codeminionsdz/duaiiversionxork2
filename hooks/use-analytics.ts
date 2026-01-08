@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 import type { AnalyticsEvent } from "@/lib/analytics"
+import { apiFetch } from '@/lib/api-client'
 
 // Track page views
 export function usePageView() {
@@ -19,7 +20,7 @@ export function usePageView() {
 // Track custom events
 export function trackEvent(event: AnalyticsEvent) {
   if (typeof window !== "undefined") {
-    fetch("/api/analytics", {
+    apiFetch("/api/analytics", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34,7 +35,7 @@ export function trackEvent(event: AnalyticsEvent) {
 // Get analytics stats (for admin dashboard)
 export async function getAnalyticsStats() {
   try {
-    const response = await fetch("/api/analytics", {
+    const response = await apiFetch("/api/analytics", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

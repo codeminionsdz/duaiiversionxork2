@@ -15,6 +15,7 @@ import Link from "next/link"
 import Image from "next/image"
 import type { Prescription } from "@/lib/types"
 import { toArabicNumber } from "@/lib/utils/number-converter"
+import { getImagesFromPrescription } from "@/lib/image-utils"
 
 interface Medicine {
   name: string
@@ -30,6 +31,7 @@ export default function PrescriptionDetailPage({ params }: { params: { id: strin
   const [estimatedTime, setEstimatedTime] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [imageUrls, setImageUrls] = useState<string[]>([])
   const router = useRouter()
   const { toast } = useToast()
 
@@ -48,6 +50,12 @@ export default function PrescriptionDetailPage({ params }: { params: { id: strin
       }
 
       setPrescription(data)
+      
+      // الحصول على جميع الصور بشكل آمن
+      const imagePaths = data.images_urls || (data.image_url ? [data.image_url] : [])
+      const urls = await getImagesFromPrescription(imagePaths)
+      setImageUrls(urls)
+      
       setIsLoading(false)
     }
 
@@ -181,20 +189,31 @@ export default function PrescriptionDetailPage({ params }: { params: { id: strin
               <div className="bg-blue-100 rounded-full p-2">
                 <Image alt="" width={20} height={20} src="/placeholder.svg" />
               </div>
-              صورة الوصفة
+              صور الوصفة {imageUrls.length > 0 && `(${imageUrls.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="relative w-full rounded-2xl overflow-hidden bg-white shadow-md border-2 border-blue-200">
+            {imageUrls.length > 0 ? (
+              <div className="space-y-4">
+                {imageUrls.map((url, index) => (
+                  <div key={index} className="relative w-full rounded-2xl overflow-hidden bg-white shadow-md border-2 border-blue-200">
                     <Image
-                src={prescription.images_urls?.[0] || "/placeholder.svg"}
-                alt="وصفة طبية"
-                width={600}
-                height={400}
-                className="w-full h-auto object-contain"
-                unoptimized={true}
-              />
-            </div>
+                      src={url}
+                      alt={`وصفة طبية ${index + 1}`}
+                      width={800}
+                      height={600}
+                      className="w-full h-auto object-contain"
+                      priority={index === 0}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300">
+                <Image alt="placeholder" width={64} height={64} src="/placeholder.svg" className="opacity-30 mb-4" />
+                <p className="text-gray-500 text-lg">لا توجد صور مرفقة</p>
+              </div>
+            )}
             {prescription.notes && (
               <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-white rounded-2xl border-2 border-blue-100">
                 <p className="text-sm font-bold text-blue-900 mb-2">ملاحظات المريض:</p>

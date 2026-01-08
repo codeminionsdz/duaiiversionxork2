@@ -221,14 +221,21 @@ export default async function PharmacyDashboardPage() {
                   <Card className="overflow-hidden hover:shadow-xl transition-all cute-card border-2 border-blue-100/50 rounded-2xl bg-gradient-to-br from-white to-blue-50/20">
                     <div className="flex gap-4 p-4">
                       <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-100 to-blue-200 border-2 border-blue-200 shadow-md">
-                      <Image
-                          src={prescription.images_urls?.[0] || "/placeholder.svg"}
-                          alt="وصفة طبية"
-                          fill
-                          className="object-cover"
-                          unoptimized={true}
-                          priority={false}
-                        />
+                        {prescription.images_urls?.[0] && (
+                          <Image
+                            src={prescription.images_urls[0]}
+                            alt="وصفة طبية"
+                            fill
+                            className="object-cover"
+                            unoptimized={true}
+                            priority={false}
+                          />
+                        )}
+                        {!prescription.images_urls?.[0] && (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <FileText className="h-8 w-8 text-blue-300" />
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import { getClientIP, checkRateLimit, RATE_LIMIT_CONFIG } from "@/lib/rate-limit";
 
 // ============================================================================
 // SUPABASE ADMIN CLIENT (SERVER-ONLY)
@@ -47,8 +49,25 @@ const registerSchema = z
     }
   });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const ip = getClientIP()
+    const rateLimitConfig = RATE_LIMIT_CONFIG.auth
+    const rateLimitResult = checkRateLimit(ip, rateLimitConfig)
+
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: rateLimitConfig.errorMessage },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimitResult.retryAfter),
+          },
+        }
+      )
+    }
+
     // Step 1: Validate environment
     console.log("🔑 Environment check:");
     console.log("  NEXT_PUBLIC_SUPABASE_URL:", !!process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -56,6 +75,7 @@ export async function POST(req: Request) {
     
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error("❌ Environment variables missing");
+      Sentry.captureMessage('Missing Supabase environment variables', 'error')
       return NextResponse.json(
         { error: "Server misconfiguration" },
         { status: 500 }
@@ -70,6 +90,11 @@ export async function POST(req: Request) {
       parsed = registerSchema.parse(body);
     } catch (validationErr: any) {
       console.error("❌ Validation error:", validationErr);
+      Sentry.captureException(validationErr, {
+        tags: {
+          component: 'auth-register-validation',
+        },
+      })
       return NextResponse.json(
         {
           error: "Validation failed",
@@ -104,6 +129,14 @@ export async function POST(req: Request) {
       console.error("   Error code:", authError?.code);
       console.error("   Error message:", authError?.message);
       console.error("   Full error:", JSON.stringify(authError, null, 2));
+      
+      // Log to Sentry
+      Sentry.captureException(authError, {
+        tags: {
+          component: 'auth-register-user-creation',
+          email: parsed.email,
+        },
+      })
       
       // Check if email already exists
       if (authError?.message?.includes("already registered") || authError?.message?.includes("already exists")) {
@@ -152,12 +185,25 @@ export async function POST(req: Request) {
       console.error("❌ Profile error details:", profileError?.details);
       console.error("❌ Profile error message:", profileError?.message);
       
+      // Log to Sentry
+      Sentry.captureException(profileError, {
+        tags: {
+          component: 'auth-register-profile-creation',
+          userId: userId,
+        },
+      })
+      
       // Rollback auth user
       try {
         await supabaseAdmin.auth.admin.deleteUser(userId);
         console.log(`✅ Rollback successful`);
       } catch (rbErr) {
         console.error("❌ Rollback failed:", rbErr);
+        Sentry.captureException(rbErr, {
+          tags: {
+            component: 'auth-register-rollback',
+          },
+        })
       }
 
       const errorMessage = profileError?.message || "Failed to create profile";
@@ -205,12 +251,25 @@ export async function POST(req: Request) {
         console.error("❌ Pharmacy error message:", pharmError?.message);
         console.error("🔍 Pharmacy payload:", pharmPayload);
         
+        // Log to Sentry
+        Sentry.captureException(pharmError, {
+          tags: {
+            component: 'auth-register-pharmacy-creation',
+            userId: userId,
+          },
+        })
+        
         // Rollback if pharmacy profile creation fails
         try {
           await supabaseAdmin.from("profiles").delete().eq("id", userId);
           await supabaseAdmin.auth.admin.deleteUser(userId);
         } catch (rbErr) {
           console.error("❌ Rollback failed:", rbErr);
+          Sentry.captureException(rbErr, {
+            tags: {
+              component: 'auth-register-rollback-pharmacy',
+            },
+          })
         }
 
         return NextResponse.json(
@@ -232,7 +291,8 @@ export async function POST(req: Request) {
 
     // Step 6: SUCCESS
     console.log(`✅✅ Registration complete for ${parsed.email}`);
-    return NextResponse.json(
+    
+    const response = NextResponse.json(
       {
         ok: true,
         message: "Account created successfully",
@@ -240,9 +300,23 @@ export async function POST(req: Request) {
         role,
       },
       { status: 201 }
-    );
+    )
+
+    // Add rate limit info to response headers
+    response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
+    response.headers.set('X-RateLimit-Limit', String(rateLimitConfig.maxRequests))
+
+    return response
   } catch (err: any) {
     console.error("❌ Unexpected error:", err);
+    
+    // Log to Sentry
+    Sentry.captureException(err, {
+      tags: {
+        component: 'auth-register',
+      },
+    })
+    
     const isProduction = process.env.NODE_ENV === "production";
     return NextResponse.json(
       {

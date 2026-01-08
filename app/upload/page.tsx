@@ -8,19 +8,20 @@ import { createClient } from "@/lib/supabase/client"
 import { BottomNav } from "@/components/layout/bottom-nav"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Camera, ImageIcon, ArrowRight, X, Sparkles } from 'lucide-react'
+import { Upload, Camera, ImageIcon, ArrowRight, X, Sparkles, MapPin } from 'lucide-react'
 import { UploadCharacter } from "@/components/illustrations/upload-character"
 import Image from "next/image"
 import { prescriptionSubmissionSchema, getFirstErrorMessage } from "@/lib/validation"
+import { PrescriptionLimitBanner } from "@/components/prescription-limit-banner"
 
 export default function UploadPage() {
   const [selectedImages, setSelectedImages] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [notes, setNotes] = useState("")
   const [isUploading, setIsUploading] = useState(false)
+  const [maxDistance, setMaxDistance] = useState(30) // Default 30km
   const router = useRouter()
   const { toast } = useToast()
 
@@ -95,6 +96,32 @@ export default function UploadPage() {
       } = await supabase.auth.getUser()
       if (!user) throw new Error("يجب تسجيل الدخول أولاً")
 
+      // 🔒 Check monthly prescription limit
+      const limitResponse = await fetch('/api/prescriptions/limit')
+      if (!limitResponse.ok) {
+        throw new Error("فشل في التحقق من الحد الشهري")
+      }
+      
+      const limitData = await limitResponse.json()
+      if (!limitData.canUpload) {
+        toast({
+          title: "تجاوزت الحد الشهري",
+          description: limitData.messageAr,
+          variant: "destructive",
+        })
+        setIsUploading(false)
+        return
+      }
+      
+      // Show warning if approaching limit
+      if (limitData.usage.remaining <= 2) {
+        toast({
+          title: "تنبيه",
+          description: limitData.messageAr,
+          variant: "default",
+        })
+      }
+
       let userLatitude = 36.7538 // Algiers fallback
       let userLongitude = 3.0588
 
@@ -121,7 +148,8 @@ export default function UploadPage() {
 
         if (uploadError) throw uploadError
 
-        // Store the file path instead of public URL
+        // Store just the file path - we'll generate signed URLs on-demand
+        // This way the URL doesn't expire during the 7-day prescription lifecycle
         uploadedUrls.push(fileName)
       }
 
@@ -130,7 +158,7 @@ export default function UploadPage() {
         .from("prescriptions")
         .insert({
           user_id: user.id,
-          images_urls: uploadedUrls, // Store array of URLs
+          images_urls: uploadedUrls, // Store array of public URLs or file paths
           notes: notes || null,
           status: "pending",
           user_latitude: userLatitude,
@@ -147,7 +175,7 @@ export default function UploadPage() {
         .eq("is_verified", true)
 
       if (pharmaciesData) {
-        // Calculate distance and filter nearby pharmacies (< 50km)
+        // Calculate distance and filter nearby pharmacies based on user-selected maxDistance
         const nearbyPharmacies = pharmaciesData.filter((pharmacy) => {
           if (!pharmacy.latitude || !pharmacy.longitude) return false
 
@@ -163,10 +191,10 @@ export default function UploadPage() {
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
           const distance = R * c
 
-          return distance < 50
+          return distance <= maxDistance
         })
 
-        console.log("Found nearby pharmacies:", nearbyPharmacies.length)
+        console.log(`Found ${nearbyPharmacies.length} pharmacies within ${maxDistance}km`)
 
         // Send notifications to nearby pharmacies
         const notifications = nearbyPharmacies.map((pharmacy) => ({
@@ -238,6 +266,9 @@ export default function UploadPage() {
       </header>
 
       <main className="p-4 space-y-5">
+        {/* 🔒 Prescription Limit Banner */}
+        <PrescriptionLimitBanner />
+
         <Card className="border-2 border-emerald-100 shadow-lg rounded-2xl overflow-hidden">
           <CardHeader className="bg-gradient-to-br from-emerald-50 to-white">
             <CardTitle className="flex items-center gap-2">
@@ -345,9 +376,6 @@ export default function UploadPage() {
             <CardDescription>أضف أي ملاحظات أو تفاصيل إضافية (اختياري)</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            <Label htmlFor="notes" className="sr-only">
-              الملاحظات
-            </Label>
             <Textarea
               id="notes"
               placeholder="مثال: أحتاج الأدوية بشكل عاجل، أو لدي حساسية من دواء معين..."
@@ -356,6 +384,35 @@ export default function UploadPage() {
               rows={4}
               className="resize-none border-2 border-emerald-100 focus:border-emerald-300 rounded-xl"
             />
+          </CardContent>
+        </Card>
+
+        {/* Distance Filter - Simple */}
+        <Card className="border-2 border-emerald-200 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-emerald-600" />
+                  <span className="text-sm font-bold text-emerald-900">نطاق البحث</span>
+                </div>
+                <span className="text-2xl font-bold text-emerald-700 bg-white px-4 py-2 rounded-xl border-2 border-emerald-400 shadow-md">
+                  {maxDistance} كم
+                </span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="100"
+                step="5"
+                value={maxDistance}
+                onChange={(e) => setMaxDistance(Number(e.target.value))}
+                className="w-full h-3 bg-emerald-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+              />
+              <p className="text-xs text-center text-emerald-700">
+                📍 سيتم إرسال الوصفة للصيدليات القريبة في نطاق {maxDistance} كم
+              </p>
+            </div>
           </CardContent>
         </Card>
 

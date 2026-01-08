@@ -133,9 +133,10 @@ export type PharmacySearchInput = z.infer<typeof pharmacySearchSchema>
 export const prescriptionSubmissionSchema = z.object({
   // Core prescription data
   medicineNames: z
-    .string({ message: "أسماء الأدوية مطلوبة" })
-    .min(1, "أسماء الأدوية مطلوبة")
-    .max(500, "أسماء الأدوية طويلة جداً"),
+    .string()
+    .max(500, "أسماء الأدوية طويلة جداً")
+    .optional()
+    .or(z.literal("")),
   
   // Notes or dosage instructions
   notes: z
